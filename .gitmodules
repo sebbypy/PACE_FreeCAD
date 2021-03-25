@@ -1,0 +1,3 @@
+[submodule "Macros/PaceTools"]
+	path = Macros/PaceTools
+	url = https://github.com/quentinguidee/PaceTools
