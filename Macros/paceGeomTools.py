@@ -373,12 +373,14 @@ class paceProject():
                                 })
         
       
-        template = QtGui.QFileDialog.getOpenFileName(None,"Select template",os.path.join(App.getUserMacroDir(True),'paceTemplates'),"XML (*.xml)")[0]
-      
+        templateWithoutPath = selectTemplate()
+        if (templateWithoutPath == None):
+            return
+        else:
+            template = os.path.join(os.path.join(App.getUserMacroDir(True),'paceTemplates',templateWithoutPath))
+        
             
-        #PaceXML = paceTools.PACEXML(os.path.join(App.getUserMacroDir(True),'paceTemplates','audit_vierge.xml'))
         PaceXML = paceTools.PACEXML(template)
-
 
         PaceXML.setTemplatesDir(os.path.join(App.getUserMacroDir(True),'paceTemplates'))
 
@@ -586,21 +588,26 @@ class skinElementsConfigurator:
         def fillLines(self):
             
             for skT in self.skinTypes:
-            
-                if (skT in self.skinDescriptions.keys()):
+                
+                if (skT not in self.skinDescriptions.keys()):
 
-                    # new version with sub-fields
-                    if ( type(self.skinDescriptions[skT])==dict ):
-            
-                        self.setDescription(skT)
-                        self.setEnvironment(skT)                        
-                        self.setType(skT)
-                        self.setSubType(skT)
-                                                
+                    self.skinDescriptions[skT]={'description': '', 'environment': '', 'type': '', 'subtype': ''}
                     
-                    else: #old version with only text description
-                        self.elemLineEditDict[skT].setText(self.skinDescriptions[skT])
-    
+                    # new version with sub-fields
+                if ( type(self.skinDescriptions[skT])==dict ):
+
+                    
+                    self.setDescription(skT)
+                    self.setEnvironment(skT)                        
+                    self.setType(skT)
+                    self.setSubType(skT)
+                                            
+                
+                else: #old version with only text description
+                    self.elemLineEditDict[skT].setText(self.skinDescriptions[skT])
+
+                
+
 
         def setDescription(self,skT):
             
@@ -621,21 +628,20 @@ class skinElementsConfigurator:
             else:
                 self.setDefaultTypeFromName(skT)
 
+            self.setSubType(skT)
+
             self.typeDropdownDict[skT].currentIndexChanged.connect(lambda index,skT=skT: self.setSubType(skT))
             
 
 
         def setDefaultTypeFromName(self,skT):
+            
+            defaultTypes = {'M':'Mur','T':'Toiture','P':'Plancher'}
 
-            #if not, default proposition depending on the name
-            if (self.elemLineEditDict[skT].text()[0] == 'M'):            
-                index = self.typeDropdownDict[skT].findText('Mur', QtCore.Qt.MatchFixedString)
-            elif (self.elemLineEditDict[skT].text()[0] == 'T'):            
-                index = self.typeDropdownDict[skT].findText('Toiture', QtCore.Qt.MatchFixedString)
-            elif (self.elemLineEditDict[skT].text()[0] == 'P'):            
-                index = self.typeDropdownDict[skT].findText('Plancher', QtCore.Qt.MatchFixedString)
+            if (skT[0] in defaultTypes.keys()):
+                index = self.typeDropdownDict[skT].findText(defaultTypes[skT[0]], QtCore.Qt.MatchFixedString)
             else:
-                index=0
+                index =0                
 
             self.typeDropdownDict[skT].setCurrentIndex(index)
 
@@ -652,6 +658,9 @@ class skinElementsConfigurator:
             if (index>=0):
                 self.subTypeDropdownDict[skT].setCurrentIndex(index)
             
+            else:
+                self.subTypeDropdownDict[skT].setCurrentIndex(0)
+                        
 
 
 
@@ -1746,8 +1755,29 @@ class labeledSurface():
         return True
         
 
+def selectTemplate():
 
-    
+        
+    templatesDict = {'Vierge' : 'audit_vierge.xml',
+                     'Chauffage Mazout radiateurs et thermostat': 'ccMazout_template.xml',
+                     'Aucun système initial': 'aucunSysteme_template.xml'
+                     }
+        
+    items = list(templatesDict.keys())
+		
+    item, ok = QtGui.QInputDialog.getItem(None, "Choose a template", "Available template", items, 0, False)
+			
+    if ok and item:
+          
+        return templatesDict[item]
+
+    else:
+        return None
+
+
+
+
+
 
 def RotateView(axisX=1.0,axisY=0.0,axisZ=0.0,angle=45.0):
 
