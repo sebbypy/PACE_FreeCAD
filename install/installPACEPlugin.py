@@ -46,6 +46,17 @@ for file in os.listdir(localFontsDir):
 
 userConfig = ET.parse(os.path.join('install','cleanUser.cfg'))
 
+# Forcing user macro dir
+
+macroPref = userConfig.find('.//FCParamGroup[@Name="Preferences"]').find('FCParamGroup[@Name="Macro"]')
+macroDirElem = ET.Element('FCText')
+macroDirElem.set('Name','MacroPath')
+macroDirElem .text=targetMacroDir
+macroPref.append(macroDirElem)
+
+
+
+
 # adding icons folder
 bitMaps = userConfig.find('.//FCParamGroup[@Name="Bitmaps"]')
 iconPathElem = ET.Element('FCText')
