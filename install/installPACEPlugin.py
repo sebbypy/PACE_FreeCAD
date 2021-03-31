@@ -9,9 +9,9 @@ userAppDir = sys.argv[1]
 
 # 1. Copying needed files in the right directories
 
-localMacroDir = os.path.join(currentDir,'..','Macros')
-localIconDir  = os.path.join(currentDir,'..','icons')
-localFontsDir = os.path.join(currentDir,'..','fonts')
+localMacroDir = os.path.join(currentDir,'Macros')
+localIconDir  = os.path.join(currentDir,'icons')
+localFontsDir = os.path.join(currentDir,'fonts')
 
 targetMacroDir = os.path.join(userAppDir,'Macro')
 targetIconDir  = os.path.join(userAppDir,'icons')
