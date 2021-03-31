@@ -27,8 +27,9 @@ if ( not os.path.exists(targetFontsDir) ):
 
 for file in os.listdir(localMacroDir):
     
-    fullFileName = os.path.join(localMacroDir,file)
-    shutil.copy(fullFileName,targetMacroDir)
+    if ('.py' in file):
+        fullFileName = os.path.join(localMacroDir,file)
+        shutil.copy(fullFileName,targetMacroDir)
 
 for file in os.listdir(localIconDir):
     
@@ -43,7 +44,7 @@ for file in os.listdir(localFontsDir):
 
 # 2. Configuring the user profile to add the PACE button 
 
-userConfig = ET.parse('cleanUser.cfg')
+userConfig = ET.parse(os.path.join('install','cleanUser.cfg'))
 
 # adding icons folder
 bitMaps = userConfig.find('.//FCParamGroup[@Name="Bitmaps"]')
