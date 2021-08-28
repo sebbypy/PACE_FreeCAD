@@ -181,7 +181,8 @@ class paceProject():
                      'Inclinée': 'INCLINED',
                      'Plate':'FLAT'
                      },
-                 'Plancher':{}
+                 'Plancher':{},
+                 'Ouverture':{}
                  }
         
         skinTypes=[]      
@@ -253,6 +254,8 @@ class paceProject():
                             index = self.typeDropdownDict[skT].findText('Toiture', QtCore.Qt.MatchFixedString)
                         elif (self.elemLineEditDict[skT].text()[0] == 'P'):            
                             index = self.typeDropdownDict[skT].findText('Plancher', QtCore.Qt.MatchFixedString)
+                        elif (self.elemLineEditDict[skT].text()[0] == 'F'):            
+                            index = self.typeDropdownDict[skT].findText('Ouverture', QtCore.Qt.MatchFixedString)
                         else:
                             index=0
 
@@ -312,7 +315,21 @@ class paceProject():
 
 
     def exportToPace(self):
-    
+
+        #setting template
+        templateWithoutPath = selectTemplate()
+        if (templateWithoutPath == None):
+            return
+        else:
+            template = os.path.join(os.path.join(App.getUserMacroDir(True),'paceTemplates',templateWithoutPath))
+        
+        
+        method = selectMeasurementMethod()
+            
+        PaceXML = paceTools.PACEXML(template)
+        PaceXML.setTemplatesDir(os.path.join(App.getUserMacroDir(True),'paceTemplates'))
+
+        
         environmentDict = {'Exterieur':'OPEN_AIR',
                            'Espace non chauffe' : 'NON_HEATED_SPACE',
                            'Sol' :'GROUND',
@@ -324,7 +341,8 @@ class paceProject():
         
         typeDict = {'Mur':'wall',
                     'Toiture':'roof',
-                    'Plancher':'floor'
+                    'Plancher':'floor',
+                    'Ouverture':'transparentElement'
                     }
         
         subTypeDict = {'Plein':'FULL',
@@ -334,7 +352,6 @@ class paceProject():
                        '':''
                        }
     
-        
         
         initAreas=self.VP['init'].getAreasByLabel() # returnes area dict of style {'M1':34,'M2':45}
         initHeatedVolume = self.VP['init'].getVolume()
@@ -365,24 +382,63 @@ class paceProject():
         
             listToExport.append({   'label':label,
                                     'description':self.skinDescriptions[label]['description'],
-                                    'environment':environmentDict[self.skinDescriptions[label]['environment']], #PACE version,
+                                    'environment':environmentDict[self.skinDescriptions[label]['environment']], 
                                     'type':typeDict[self.skinDescriptions[label]['type']],
                                     'subtype':subTypeDict[self.skinDescriptions[label]['subtype']],
                                     'grossArea':initGrossArea,
                                     'grossAreaMod':modGrossArea
                                 })
         
-      
-        templateWithoutPath = selectTemplate()
-        if (templateWithoutPath == None):
-            return
-        else:
-            template = os.path.join(os.path.join(App.getUserMacroDir(True),'paceTemplates',templateWithoutPath))
-        
-            
-        PaceXML = paceTools.PACEXML(template)
 
-        PaceXML.setTemplatesDir(os.path.join(App.getUserMacroDir(True),'paceTemplates'))
+        if (method == 'netSurface'):
+            
+            if ( not self.hasCompassSet()):
+                msgBox = QtGui.QMessageBox()
+                msgBox.setIcon(QtGui.QMessageBox.Information)
+                msgBox.setText("You have to define the project orientation before exporting a model with windows")
+                msgBox.setWindowTitle("Define orientaton first")
+                msgBox.setStandardButtons(QtGui.QMessageBox.Ok)
+                msgBox.exec()
+
+                return
+            
+            PaceXML.setMeasurementMethod('surfacesnettes')
+            PaceXML.addNetSurfaces(listToExport)
+        elif (method == 'grossSurface'):
+            PaceXML.setMeasurementMethod('surfacesbrutes')
+            PaceXML.addSurfaces(listToExport)
+        
+        #get openings, and add openings
+        
+        initOpenings = self.VP['init'].getOpenings(self.skinDescriptions,self.sectormap)
+
+        if 'mod' in self.VP.keys():
+            modOpenings  = self.VP['mod'].getOpenings(self.skinDescriptions,self.sectormap)
+
+        allOpenings = initOpenings.copy()
+        for op in allOpenings:
+            op['init']=True         
+       
+        for op in modOpenings:
+            modOnly = True
+            for opInit in initOpenings:
+                if op==opInit:
+                    op['mod']=True
+                    modOnly = False
+            if modOnly:
+                allOpenings.append(op)
+                # STATE ADDED IN PACE FILE
+                
+        openingLabelCounter = {}
+        
+        for opening in initOpenings:
+            if opening['label'] in openingLabelCounter.keys():
+                openingLabelCounter[opening['label']] += 1
+            else:
+                openingLabelCounter[opening['label']] = 1
+            
+            openingName = opening['label']+'/'+str(openingLabelCounter[opening['label']])
+            PaceXML.addOpeningNetMethod(openingName,opening['label'],opening['orientation'],inclination=90,area=opening['area'])
 
         PaceXML.setMeasurementMethod('surfacesbrutes')
         PaceXML.addSurfaces(listToExport)
@@ -426,6 +482,15 @@ class paceProject():
         os.remove(temporaryPNG)
 
         
+    def hasCompassSet(self):
+        
+        if (hasattr(self,'sectormap')):
+            
+            if (len(self.sectormap) >0 ):
+            
+                return True
+
+        return False
 
     
     def todict(self):
@@ -505,7 +570,8 @@ class skinElementsConfigurator:
             self.subTypes={
                         'Mur':     {'Plein':'FULL','Creux':'HOLLOW'},
                         'Toiture': {'Inclinée': 'INCLINED', 'Plate':'FLAT'},
-                        'Plancher':{}
+                        'Plancher':{},
+                        'Ouverture':{}
                           }
 
 
@@ -636,7 +702,7 @@ class skinElementsConfigurator:
 
         def setDefaultTypeFromName(self,skT):
             
-            defaultTypes = {'M':'Mur','T':'Toiture','P':'Plancher'}
+            defaultTypes = {'M':'Mur','T':'Toiture','P':'Plancher','F':'Ouverture'}
 
             if (skT[0] in defaultTypes.keys()):
                 index = self.typeDropdownDict[skT].findText(defaultTypes[skT[0]], QtCore.Qt.MatchFixedString)
@@ -1062,6 +1128,40 @@ class ProtectedVolume():
         return areas
     
     
+    def getOpenings(self,projectSkinDescription,sectorMap):
+        
+        definedlabels=[ x if x != None else 'No Label' for x in self.getLabels() ]
+        uniquelabels=list(set(definedlabels))
+        uniquelabels.sort() #inplace sorting
+
+        N=16
+        dalpha=360/N
+
+        #self.sectormap
+
+        openings=[]
+        skTOpeningsCount = { skT:0 for skT in projectSkinDescription.keys()}     
+
+        for lface in self.labeledFaces:
+
+            skT=lface.getLabel()
+            
+            if ( projectSkinDescription[skT]['type']  == 'Ouverture'):
+                
+                    skTOpeningsCount[skT] += 1
+                
+                    azimuth = lface.getAzimuth()
+                    sector=int((azimuth%360+dalpha/2)/dalpha)%N
+                    cardinalDir = sectorMap[sector]
+                   
+                    #openingChar = {'name':skT+'/'+str(skTOpeningsCount[skT]), 'label':skT,'orientation':cardinalDir,'area':lface.getArea()}
+                    #naming should not be done here, since it's also project dependent
+                    openingChar = {'label':skT,'orientation':cardinalDir,'area':lface.getArea(),'center':lface.getCenterOfMass()}
+                    
+                    openings.append(openingChar)
+                    
+        return openings
+    
     def showAreasPerFacade(self,sectormap):
     
         N=16
@@ -1385,18 +1485,25 @@ class ProtectedVolume():
         av=Gui.ActiveDocument.ActiveView
         ndx,ndy=av.getSize()
 
-        nleg=len(self.legendobj)
-         
         xpos=int(0.05*ndx)
         ypos=int(0.02*ndy)
+        
+        yShift = 50
+        xShift = 80
 
         for k,v in self.legendobj.items():
-
-            ypos+=50
+           
+            if (ypos > (ndy-yShift) ):
+                #if higher than max screen y --> second column
+                ypos = int(0.02*ndy)
+                xpos += xShift
             
             v.BasePosition=(av.getPoint(xpos,ypos))       
             Gui.ActiveDocument.getObject(v.Name).show()
             Gui.ActiveDocument.getObject(v.Name).FontSize=20
+
+            ypos += yShift
+
 
 
     def startCameraCallBack(self):
@@ -1517,6 +1624,9 @@ class labeledSurface():
         azimuth=np.degrees(np.arctan2(normal.y,normal.x))
         
         return(azimuth)
+    
+    def getCenterOfMass(self):
+        return self.solidFace.CenterOfMass
     
             
     def createFreeFace(self):
@@ -1775,6 +1885,32 @@ def selectTemplate():
         return None
 
 
+def selectMeasurementMethod():
+
+        
+    choiceDict = {'Methode des surfaces nettes' : 'netSurface',
+                  'Methode des surfaces brutes' : 'grossSurface'
+                  }
+        
+    items = list(choiceDict.keys())
+		
+    text = ''
+    text+= 'Methode des surfaces netttes: à choisir si les fenêtres ont été dessinées dans le modèle 3D.\n\n'
+    text+= 'Methode des surfaces brutes: à choisir si les fenêtres n\'ont pas été dessinées et doivent être rajoutées par après dans PACE.\n'
+    
+    item, ok = QtGui.QInputDialog.getItem(None, "Choisir une méthode de mesure pour l'export", text, items, 0, False)
+			
+    if ok and item:
+          
+        return choiceDict[item]
+
+    else:
+        return None
+
+
+
+
+
 
 
 
@@ -1793,6 +1929,49 @@ def RotateView(axisX=1.0,axisY=0.0,axisZ=0.0,angle=45.0):
         cam.orientation = nrot
     except Exception:
         print( "Not ActiveView ")
+
+
+
+
+def getColors(N):
+    
+    # see map of colors on following adress
+    #https://stackoverflow.com/questions/2328339/how-to-generate-n-different-colors-for-any-natural-number-n
+    # 19th colors was deleted because too close to white
+    
+    hexcolors = ["#000000", "#FFFF00", "#1CE6FF", "#FF34FF", "#FF4A46", "#008941", "#006FA6", "#A30059",
+                "#FFDBE5", "#7A4900", "#0000A6", "#63FFAC", "#B79762", "#004D43", "#8FB0FF", "#997D87",
+                "#5A0007", "#809693",  "#1B4400", "#4FC601", "#3B5DFF", "#4A3B53", "#FF2F80",
+                "#61615A", "#BA0900", "#6B7900", "#00C2A0", "#FFAA92", "#FF90C9", "#B903AA", "#D16100",
+                "#DDEFFF", "#000035", "#7B4F4B", "#A1C299", "#300018", "#0AA6D8", "#013349", "#00846F",
+                "#372101", "#FFB500", "#C2FFED", "#A079BF", "#CC0744", "#C0B9B2", "#C2FF99", "#001E09",
+                "#00489C", "#6F0062", "#0CBD66", "#EEC3FF", "#456D75", "#B77B68", "#7A87A1", "#788D66",
+                "#885578", "#FAD09F", "#FF8A9A", "#D157A0", "#BEC459", "#456648", "#0086ED", "#886F4C",
+                "#34362D", "#B4A8BD", "#00A6AA", "#452C2C", "#636375", "#A3C8C9", "#FF913F", "#938A81",
+                "#575329", "#00FECF", "#B05B6F", "#8CD0FF", "#3B9700", "#04F757", "#C8A1A1", "#1E6E00",
+                "#7900D7", "#A77500", "#6367A9", "#A05837", "#6B002C", "#772600", "#D790FF", "#9B9700",
+                "#549E79", "#FFF69F", "#201625", "#72418F", "#BC23FF", "#99ADC0", "#3A2465", "#922329",
+                "#5B4534", "#FDE8DC", "#404E55", "#0089A3", "#CB7E98", "#A4E804", "#324E72", "#6A3A4C",
+                "#83AB58", "#001C1E", "#D1F7CE", "#004B28", "#C8D0F6", "#A3A489", "#806C66", "#222800",
+                "#BF5650", "#E83000", "#66796D", "#DA007C", "#FF1A59", "#8ADBB4", "#1E0200", "#5B4E51",
+                "#C895C5", "#320033", "#FF6832", "#66E1D3", "#CFCDAC", "#D0AC94", "#7ED379", "#012C58"]
+
+    rgb_colors=[]
+    
+    for c in range(N):
+    
+        #colors 0 (black) and 1 (yellow) not used becaus not nice
+        
+        h = hexcolors[c+2].lstrip('#')
+        rgbcolor = tuple(float(int(h[i:i+2], 16))/256 for i in (0, 2, 4))
+
+        rgb_colors.append(rgbcolor)
+
+    return rgb_colors
+
+
+
+
 
 
 
