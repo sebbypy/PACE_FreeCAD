@@ -12,6 +12,8 @@ import numpy as np
 
 
 from PySide import QtGui,QtCore
+from PySide2 import QtWidgets
+
 
 from pivy import coin
 
@@ -440,8 +442,6 @@ class paceProject():
             openingName = opening['label']+'/'+str(openingLabelCounter[opening['label']])
             PaceXML.addOpeningNetMethod(openingName,opening['label'],opening['orientation'],inclination=90,area=opening['area'])
 
-        PaceXML.setMeasurementMethod('surfacesbrutes')
-        PaceXML.addSurfaces(listToExport)
 
         PaceXML.setHeatedVolume(initHeatedVolume,modHeatedVolume)        
         PaceXML.setInsideTemperature(18)        
@@ -1077,30 +1077,49 @@ class ProtectedVolume():
     def showAreasAndVolume(self):
     
         areas=self.getAreasByLabel()
-        
-        texttoprint=''
-        
-        for k,v in areas.items():
-            texttoprint+=str(k).ljust(10)+str(round(v,2))+' m2 \n'
-                      
         volume=self.getVolume()
-        
-        texttoprint+=str('Volume').ljust(10)+str(round(volume,2))+' m3 \n'
                   
         dialog=QtGui.QDialog()
         dialog.setWindowTitle("Areas and volume of the model")
         lo=QtGui.QVBoxLayout()
+        
+        nRows = len(areas)+1
+        nCols = 3
+        
+        tableWidget = QtGui.QTableWidget(nRows,nCols)
+                           
+        tableWidget.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.AdjustToContents)
+
+        tableWidget.setHorizontalHeaderLabels(['Surface/volume name','Area or volume','unit'])
+        
+        count=0
+        for labelName,labelArea in areas.items():
+            labelItem = QtGui.QTableWidgetItem(labelName)
+            surfaceItem = QtGui.QTableWidgetItem(str(np.round(labelArea,2)))
+            unitItem = QtGui.QTableWidgetItem(str('m2'))
+            tableWidget.setItem(count,0,labelItem)
+            tableWidget.setItem(count,1,surfaceItem)
+            tableWidget.setItem(count,2,unitItem)
+            count+=1
+
+        tableWidget.setItem(count,0,QtGui.QTableWidgetItem('ProtectedVolume'))
+        tableWidget.setItem(count,1,QtGui.QTableWidgetItem(str(np.round(volume,2))))
+        tableWidget.setItem(count,2,QtGui.QTableWidgetItem('m3'))
+        
+        tableWidget.resizeColumnsToContents()
+        #textE=QtGui.QTextEdit()
+        #lo.addWidget(textE)
+        lo.addWidget(tableWidget)
         dialog.setLayout(lo)
         
-        textE=QtGui.QTextEdit()
-        lo.addWidget(textE)
+        copyToClipboardButton = QtGui.QPushButton('Copy to clipboard')
+        copyToClipboardButton.clicked.connect(lambda: copyTable(tableWidget))
+        lo.addWidget(copyToClipboardButton)
         
-        textE.setText(texttoprint)
+        #textE.setText(texttoprint)
         dialog.exec()
+
     
-    def getVolume(self):
-    
-        return self.body.Shape.Volume/1e9
     
     def getAreasByLabel(self):
     
@@ -1109,7 +1128,7 @@ class ProtectedVolume():
         uniquelabels.sort() #inplace sorting
 
         areas={ label:0 for label in uniquelabels }
-        areas["Total"]=0
+        areas["Total area"]=0
     
         for lface in self.labeledFaces:
         
@@ -1123,7 +1142,7 @@ class ProtectedVolume():
                 key='No Label'
                 
             areas[key]+=area       
-            areas["Total"]+=area
+            areas["Total area"]+=area
         
         return areas
     
@@ -1619,8 +1638,6 @@ class labeledSurface():
 
         normal=self.solidFace.normalAt(0,0)    
     
-        xvector=App.Vector(1,0,0)
-        yvector=App.Vector(0,1,0)
         azimuth=np.degrees(np.arctan2(normal.y,normal.x))
         
         return(azimuth)
@@ -1915,6 +1932,9 @@ def selectMeasurementMethod():
 
 
 
+
+
+
 def RotateView(axisX=1.0,axisY=0.0,axisZ=0.0,angle=45.0):
 
     #Gui.ActiveDocument.ActiveView.getViewDirection()
@@ -1972,6 +1992,22 @@ def getColors(N):
 
 
 
+def copyTable(tableWidget):
 
+    clipBoard = QtGui.QApplication.clipboard()
+    copyString = ''
+
+    nRows = tableWidget.rowCount()
+    nCols = tableWidget.columnCount()
+    
+    
+    
+    for i in range(nRows):
+        for j in range(nCols):
+            copyString += tableWidget.item(i,j).text()+'\t'
+        
+        copyString += '\n'
+    
+    clipBoard.setText(copyString)
 
 
