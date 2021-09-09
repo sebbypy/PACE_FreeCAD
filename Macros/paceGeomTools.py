@@ -1107,8 +1107,6 @@ class ProtectedVolume():
         tableWidget.setItem(count,2,QtGui.QTableWidgetItem('m3'))
         
         tableWidget.resizeColumnsToContents()
-        #textE=QtGui.QTextEdit()
-        #lo.addWidget(textE)
         lo.addWidget(tableWidget)
         dialog.setLayout(lo)
         
@@ -1116,7 +1114,6 @@ class ProtectedVolume():
         copyToClipboardButton.clicked.connect(lambda: copyTable(tableWidget))
         lo.addWidget(copyToClipboardButton)
         
-        #textE.setText(texttoprint)
         dialog.exec()
 
     
@@ -1125,7 +1122,7 @@ class ProtectedVolume():
     
         definedlabels=[ x if x != None else 'No Label' for x in self.getLabels() ]
         uniquelabels=list(set(definedlabels))
-        uniquelabels.sort() #inplace sorting
+        uniquelabels.sort() 
 
         areas={ label:0 for label in uniquelabels }
         areas["Total area"]=0
@@ -1151,7 +1148,7 @@ class ProtectedVolume():
         
         definedlabels=[ x if x != None else 'No Label' for x in self.getLabels() ]
         uniquelabels=list(set(definedlabels))
-        uniquelabels.sort() #inplace sorting
+        uniquelabels.sort() 
 
         N=16
         dalpha=360/N
@@ -1181,22 +1178,26 @@ class ProtectedVolume():
                     
         return openings
     
-    def showAreasPerFacade(self,sectormap):
     
-        N=16
-        dalpha=360/N
+    def getUniqueLabels(self):
+        
+        """to be written, used several times"""
+        
+        return None
+
+
+    def computeAreasPerFacade(self,sectormap):
+            
+        numberOfDirections = 16
+        dalpha=360/numberOfDirections
 
         
         labels=[ x if x != None else 'No Label' for x in self.getLabels() ]
-        uniquelabels=list(set(labels))
-        uniquelabels.sort() #inplace sorting
 
         azimuths = [ lface.getAzimuth() for lface in self.labeledFaces ]
-        
-        
         incl= [ lface.getInclination() for lface in self.labeledFaces ]
         areas= [ lface.freeFace.Shape.Area/1e6 for lface in self.labeledFaces ]
-        sectors=[ int((az%360+dalpha/2)/dalpha)%N for az in azimuths ]
+        sectors=[ int((az%360+dalpha/2)/dalpha)%numberOfDirections for az in azimuths ]
 
         unique_sectors=[]
         unique_roofpanes=[]
@@ -1212,7 +1213,6 @@ class ProtectedVolume():
 
             elif (i<5):
                 unique_roofpanes.append((0,0)) # FLAT ROOF --> same sector 0 per default
-
                 
             else:
                 unique_roofpanes.append((s,i)) #inclined roof
@@ -1258,53 +1258,125 @@ class ProtectedVolume():
                 else:
                     rdict[(s,i)][l]+=a
             
-         
-        strprint=""
-         
-        for facade in fdict.keys():
+        return fdict,rdict,floors
         
-            facadename=sectormap[facade]
         
-            strprint+="Facade "+str(facadename)+"\n"
-            
-            for wtype in fdict[facade].keys():
-            
-                strprint+="   "+wtype+" : "+str(round(fdict[facade][wtype],2))+" m2 \n"
 
-     
-        for rpane in rdict.keys():
-
-            roofInclination = round(rpane[1],0)
-
-            if (roofInclination < 5):
-                roofCardinalDirection = "Aucune (toit plat)"
-            else:
-                roofCardinalDirection=sectormap[rpane[0]]   
-            
-
-            strprint+="Pan de toit: direction "+roofCardinalDirection+", inclinaison "+str(roofInclination)+"\n"
-            
-            for rtype in rdict[rpane].keys():
-            
-                strprint+="   "+rtype+" : "+str(round(rdict[rpane][rtype],2))+" m2 \n"
-
-
-
-        strprint+="Planchers \n"
-        for ptype in floors.keys():
-            strprint+="    "+ptype+" : "+str(round(floors[ptype],2))+" m2\n"
-     
-
+    def showAreasPerFacade(self,sectormap):
+    
+        fdict,rdict,floors = self.computeAreasPerFacade(sectormap)
+        
         dialog=QtGui.QDialog()
-        dialog.setWindowTitle("Areas of the model")
+        dialog.setWindowTitle("Areas and volume of the model per pane/facade")
         lo=QtGui.QVBoxLayout()
+        
+        boldFont = QtGui.QFont()
+        boldFont.setBold(True)
+
+        italFont = QtGui.QFont()
+        italFont.setItalic(True)        
+        
+        nRows = 3 + len(fdict) + len(rdict) + len(floors)
+        
+        for facadePlane  in fdict.keys():
+            nRows += len(fdict[facadePlane])
+
+        for roofPane in rdict.keys():
+            nRows += len(rdict[roofPane])
+        
+        nRows += 2 #blank lines between sectoins
+        
+        nCols = 5
+        
+        tableWidget = QtGui.QTableWidget(nRows,nCols)
+        tableWidget.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.AdjustToContents)
+
+        count=0
+        
+        headerItem = QtGui.QTableWidgetItem('Pans de toitures')
+        headerItem.setFont(boldFont)
+        tableWidget.setItem(count,0,headerItem)
+        count+=1
+        
+        for roofPaneTuple in rdict.keys():
+            
+            roofInclination = str(round(roofPaneTuple[1],0))
+            roofCardinalDirection=sectormap[roofPaneTuple[0]]   
+
+            rowStrings = ['Pan de toit xx','Orientation :',roofCardinalDirection,'Pente :',roofInclination]
+            
+            col=0
+            for string in rowStrings:
+                tableItem = QtGui.QTableWidgetItem(string)
+                tableItem.setFont(italFont)
+                tableWidget.setItem(count,col,tableItem)
+                col += 1
+
+            count+=1
+                 
+            for roofType in rdict[roofPaneTuple].keys():
+
+                area = round(rdict[roofPaneTuple][roofType],2)
+                tableWidget.setItem(count,1,QtGui.QTableWidgetItem(roofType))
+                tableWidget.setItem(count,2,QtGui.QTableWidgetItem(str(area)))
+                tableWidget.setItem(count,3,QtGui.QTableWidgetItem('m2'))
+                
+                count += 1
+
+
+        count+=1
+        headerItem = QtGui.QTableWidgetItem('Facades')
+        headerItem.setFont(boldFont)
+        tableWidget.setItem(count,0,headerItem)
+        count+=1
+
+        for facadePlane in fdict.keys():
+            
+            facadeCardinalDirection=sectormap[facadePlane]   
+
+            rowStrings = ['Facade xx', 'Orientation :',facadeCardinalDirection]
+            
+            col=0
+            for string in rowStrings:
+                tableItem = QtGui.QTableWidgetItem(string)
+                tableItem.setFont(italFont)
+                tableWidget.setItem(count,col,tableItem)
+                col += 1
+            count+=1
+                 
+            for facadeType in fdict[facadePlane].keys():
+
+                area = round(fdict[facadePlane][facadeType],2)
+                tableWidget.setItem(count,1,QtGui.QTableWidgetItem(facadeType))
+                tableWidget.setItem(count,2,QtGui.QTableWidgetItem(str(area)))
+                tableWidget.setItem(count,3,QtGui.QTableWidgetItem('m2'))
+                
+                count += 1
+
+        count+=1
+        headerItem = QtGui.QTableWidgetItem('Sols')
+        headerItem.setFont(boldFont)
+        tableWidget.setItem(count,0,headerItem)
+        count+=1
+
+        for floorType in floors.keys():
+            area = round(floors[floorType],2)
+            tableWidget.setItem(count,1,QtGui.QTableWidgetItem(floorType))
+            tableWidget.setItem(count,2,QtGui.QTableWidgetItem(str(area)))
+            tableWidget.setItem(count,3,QtGui.QTableWidgetItem('m2'))
+            
+            count += 1
+        
+        tableWidget.resizeColumnsToContents()
+        lo.addWidget(tableWidget)
         dialog.setLayout(lo)
         
-        textE=QtGui.QTextEdit()
-        lo.addWidget(textE)
+        copyToClipboardButton = QtGui.QPushButton('Copy to clipboard')
+        copyToClipboardButton.clicked.connect(lambda: copyTable(tableWidget))
+        lo.addWidget(copyToClipboardButton)
         
-        textE.setText(strprint)
         dialog.exec()
+
 
     
     
